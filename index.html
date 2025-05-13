@@ -35,9 +35,25 @@
     margin-bottom: 10px;
     font-size: 1.1rem;
     font-weight: 600;
-    color: #ffea00;
     text-align: center;
-    min-height: 1.3em;
+    min-height: 1.4em;
+  }
+  .status.white-turn {
+    color: #ffea00;
+  }
+  .status.black-turn {
+    color: #ffea00;
+  }
+  .status.check {
+    color: #ff5555;
+  }
+  .status.checkmate {
+    color: #ff3333;
+    font-weight: 700;
+  }
+  .status.stalemate {
+    color: #ccc;
+    font-style: italic;
   }
 
   #chessboard {
@@ -51,7 +67,6 @@
     box-shadow: 0 0 12px #ffea00;
     touch-action: manipulation;
     user-select: none;
-    /* Prevent scaling on small devices */
   }
 
   .square {
@@ -114,7 +129,6 @@
     background-color: #ffd700;
   }
 
-  /* Disable scaling and keep fixed sizes on mobile */
   @media (max-width: 450px) {
     body {
       padding: 10px 5px 20px;
@@ -136,19 +150,17 @@
 </head>
 <body>
 <h1>Chess Web App</h1>
-<div class="status" id="status">White to move</div>
+<div class="status white-turn" id="status">White to move</div>
 <div id="chessboard"></div>
 <button id="resetBtn">Reset Game</button>
 
 <script>
 (() => {
-  // Unicode chess pieces
   const PIECES = {
     wP: '♙', wR: '♖', wN: '♘', wB: '♗', wQ: '♕', wK: '♔',
     bP: '♟', bR: '♜', bN: '♞', bB: '♝', bQ: '♛', bK: '♚',
   };
 
-  // Board files and ranks for notation
   const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
   const RANKS = [8,7,6,5,4,3,2,1];
 
@@ -224,12 +236,10 @@
   function onBoard(row, col) {
     return row >= 0 && row < 8 && col >= 0 && col < 8;
   }
-
   function getColor(piece) {
     if(!piece) return null;
     return piece[0];
   }
-
   function getPieceType(piece) {
     if(!piece) return null;
     return piece[1];
@@ -300,7 +310,6 @@
     }
     return moves;
   }
-
   function generateSlidingMoves(row,col,color,directions) {
     const moves = [];
     for(const [dr,dc] of directions) {
@@ -440,6 +449,37 @@
     return candidates.filter(move => !moveExposesKing(row,col,move.toRow,move.toCol));
   }
 
+  function isKingInCheck(color) {
+    // Find king position
+    let kr = -1, kc = -1;
+    outer: for(let r=0;r<8;r++) {
+      for(let c=0;c<8;c++) {
+        if(board[r][c] === color + 'K') {
+          kr = r; kc = c;
+          break outer;
+        }
+      }
+    }
+    if(kr === -1) return false; // No king found (should not happen)
+
+    // Check all enemy moves attack king
+    const enemyColor = (color === 'w') ? 'b' : 'w';
+    for(let r=0; r<8; r++) {
+      for(let c=0; c<8; c++) {
+        const p = board[r][c];
+        if(p && getColor(p) === enemyColor) {
+          const enemyMoves = generateMoves(r,c);
+          for(const m of enemyMoves) {
+            if(m.toRow === kr && m.toCol === kc) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   function highlightMoves(row,col) {
     clearHighlights();
     const square = getSquareEl(row,col);
@@ -517,20 +557,39 @@
   }
 
   function updateStatus() {
-    const currentPlayer = whiteToMove ? 'White' : 'Black';
-    if(gameOver) {
-      statusEl.textContent = `Game over. ${currentPlayer === 'White' ? 'Black' : 'White'} wins!`;
-      statusEl.style.color = '#ff3333';
+    if(gameOver) return; // handled in checkGameEnd()
+    const currentPlayer = whiteToMove ? 'w' : 'b';
+    const currentPlayerName = whiteToMove ? 'White' : 'Black';
+    const inCheck = isKingInCheck(currentPlayer);
+    if(inCheck) {
+      statusEl.textContent = currentPlayerName + " to move — Check!";
+      statusEl.className = "status check " + (whiteToMove ? "white-turn" : "black-turn");
     } else {
-      statusEl.textContent = `${currentPlayer} to move`;
-      statusEl.style.color = '#ffea00';
+      statusEl.textContent = currentPlayerName + " to move";
+      statusEl.className = "status " + (whiteToMove ? "white-turn" : "black-turn");
     }
   }
 
   function checkGameEnd() {
-    const movesAvailable = hasAnyLegalMoves(whiteToMove ? 'w' : 'b');
+    const currentPlayer = whiteToMove ? 'w' : 'b';
+    const currentPlayerName = whiteToMove ? 'White' : 'Black';
+    const opponentName = whiteToMove ? 'Black' : 'White';
+
+    const movesAvailable = hasAnyLegalMoves(currentPlayer);
+    const inCheck = isKingInCheck(currentPlayer);
+
     if(!movesAvailable) {
       gameOver = true;
+      if(inCheck) {
+        // Checkmate
+        statusEl.textContent = "Checkmate! " + opponentName + " wins!";
+        statusEl.className = "status checkmate";
+      } else {
+        // Stalemate
+        statusEl.textContent = "Stalemate! Draw.";
+        statusEl.className = "status stalemate";
+      }
+    } else {
       updateStatus();
     }
   }
@@ -565,3 +624,4 @@
 </script>
 </body>
 </html>
+
